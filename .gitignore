@@ -1,0 +1,10 @@
+# Claude Code local machine config (paths, permissions — not portable)
+.claude/settings.local.json
+
+# Logs & runtime artefacts
+*.log
+
+# OS cruft
+Thumbs.db
+desktop.ini
+.DS_Store
