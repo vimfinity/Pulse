@@ -739,15 +739,13 @@ try {
       </Setter>
     </Style>
   </Window.Resources>
-  <Border x:Name="PART_Root" Margin="12" CornerRadius="13" Background="#E60D121A" BorderThickness="0">
+  <Border x:Name="PART_Root" Margin="12" CornerRadius="13" Background="#E6000000" BorderThickness="0">
     <Border.Effect><DropShadowEffect BlurRadius="22" ShadowDepth="6" Direction="270" Opacity="0.55" Color="#000000"/></Border.Effect>
-    <Border x:Name="PART_Tint" CornerRadius="13">
-      <Border.Background>
-        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-          <GradientStop Color="#4A18212C" Offset="0"/>
-          <GradientStop Color="#660E141C" Offset="1"/>
-        </LinearGradientBrush>
-      </Border.Background>
+    <!-- Flacher schwarzer Tint (kein Gradient, keine Farbe). Deckkraft ADAPTIV in
+         Set-FrostCapture: dunkler Hintergrund -> leicht, damit der Blur-/Acryl-Look
+         sichtbar bleibt; heller Hintergrund -> kraeftig, damit die helle Schrift lesbar
+         bleibt. #17000000 (9%) ist nur der Startwert fuer dunkle Hintergruende. -->
+    <Border x:Name="PART_Tint" CornerRadius="13" Background="#17000000">
     <StackPanel>
       <Grid Margin="18,15,14,11">
         <Grid.ColumnDefinitions>
@@ -793,6 +791,7 @@ try {
   $script:PartToggle      = $script:Win.FindName('PART_Toggle')
   $script:PartHint        = $script:Win.FindName('PART_Hint')
   $script:PartRoot        = $script:Win.FindName('PART_Root')
+  $script:PartTint        = $script:Win.FindName('PART_Tint')
   $script:PartRoot.Add_SizeChanged({ Update-FrostViewbox })
   $script:View            = 'agents'   # 'agents' | 'stats' | 'zeiten'
   $logoEl = $script:Win.FindName('PART_Logo')
@@ -1699,6 +1698,18 @@ foreach ($dk in @($days.Keys)) {                                               #
       $gc = [System.Drawing.Graphics]::FromImage($shot)
       $gc.CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size); $gc.Dispose()
       $blur = Blur-Bitmap $shot 10 2
+      # Adaptive Tint-Deckkraft: mittlere Hintergrundhelligkeit per 1x1-Downscale messen.
+      # Dunkel -> wenig Tint (Acryl/Blur bleibt sichtbar), hell -> viel Tint (heller
+      # Desktop wuerde sonst die helle Schrift verschlucken). Reines Schwarz, ~2%..85%
+      # (dunkler BG landet bei ~9%). Regler = 0.88-Steigung / 0.02-Boden.
+      $one = [System.Drawing.Bitmap]::new(1, 1)
+      $g1 = [System.Drawing.Graphics]::FromImage($one); $g1.InterpolationMode = 'HighQualityBilinear'; $g1.DrawImage($blur, 0, 0, 1, 1); $g1.Dispose()
+      $px = $one.GetPixel(0, 0); $one.Dispose()
+      $lum = (0.299 * $px.R + 0.587 * $px.G + 0.114 * $px.B) / 255.0
+      $alpha = [int](255 * [Math]::Min(0.85, [Math]::Max(0.02, $lum * 0.88)))
+      if ($script:PartTint) {
+        $script:PartTint.Background = [System.Windows.Media.SolidColorBrush]::new([System.Windows.Media.Color]::FromArgb($alpha, 0, 0, 0))
+      }
       $srcimg = ConvertTo-FrostSource $blur
       $shot.Dispose(); $blur.Dispose()
       $brush = [System.Windows.Media.ImageBrush]::new($srcimg)
