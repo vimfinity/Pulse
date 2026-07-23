@@ -27,6 +27,24 @@ $uiScript = {
   $script:AppDir = if ($AppDir) { $AppDir } else { $PWD.Path }
   "[{0}] UI start (apartment={1})" -f (Get-Date -Format o), ([System.Threading.Thread]::CurrentThread.GetApartmentState()) | Out-File $LogPath -Append
 
+  # DPI: pin the process to Per-Monitor-V2 BEFORE any window is realised, so GDI screen
+  # capture, WinForms Screen.Bounds and WPF PointToScreen/TransformToDevice all share one
+  # physical-pixel space. Without it pwsh starts DPI-unaware and the self-rendered frost
+  # (Set-FrostCapture) maps the wrong screen region on a monitor whose scaling differs from
+  # the primary. .NET (pwsh) only — Windows PowerShell 5.1's WPF ignores the PMv2 context.
+  if ($PSVersionTable.PSEdition -eq 'Core') {
+    try {
+      Add-Type -Namespace Pulse -Name Dpi -MemberDefinition @'
+[System.Runtime.InteropServices.DllImport("user32.dll")]
+public static extern bool SetProcessDpiAwarenessContext(System.IntPtr ctx);
+'@
+      # DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = -4
+      [void][Pulse.Dpi]::SetProcessDpiAwarenessContext([System.IntPtr]::new(-4))
+    } catch {
+      "[{0}] dpi: {1}" -f (Get-Date -Format o), $_.Exception.Message | Out-File $LogPath -Append
+    }
+  }
+
   Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, System.Windows.Forms, System.Drawing, UIAutomationClient, UIAutomationTypes
 
   if (-not ([System.Management.Automation.PSTypeName]'Pulse.Native').Type) {
